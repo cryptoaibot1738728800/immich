@@ -1,14 +1,22 @@
 import { Selectable } from 'kysely';
+import { isUndefined, omitBy } from 'lodash';
 import { SharedLinkType } from 'src/enum';
 import { SharedLinkTable } from 'src/schema/tables/shared-link.table';
 import { AlbumFactory } from 'test/factories/album.factory';
 import { build } from 'test/factories/builder.factory';
-import { AlbumLike, FactoryBuilder, SharedLinkLike, UserLike } from 'test/factories/types';
+import {
+  AlbumLike,
+  FactoryBuilder,
+  RelationKeysPath,
+  SharedLinkLike,
+  SharedLinkStub,
+  UserLike,
+} from 'test/factories/types';
 import { UserFactory } from 'test/factories/user.factory';
 import { factory, newDate, newUuid } from 'test/small.factory';
 
-export class SharedLinkFactory {
-  #owner: UserFactory;
+export class SharedLinkFactory<T extends RelationKeysPath<'sharedLink'> = never> {
+  #owner?: UserFactory;
   #album?: AlbumFactory;
 
   private constructor(private readonly value: Selectable<SharedLinkTable>) {
@@ -42,22 +50,25 @@ export class SharedLinkFactory {
     });
   }
 
-  owner(dto: UserLike = {}, builder?: FactoryBuilder<UserFactory>): SharedLinkFactory {
+  owner(dto: UserLike = {}, builder?: FactoryBuilder<UserFactory>) {
     this.#owner = build(UserFactory.from(dto), builder);
-    return this;
+    return this as SharedLinkFactory<T | 'owner'>;
   }
 
   album(dto: AlbumLike = {}, builder?: FactoryBuilder<AlbumFactory>) {
     this.#album = build(AlbumFactory.from(dto), builder);
-    return this;
+    return this as SharedLinkFactory<T | 'album'>;
   }
 
   build() {
-    return {
-      ...this.value,
-      owner: this.#owner.build(),
-      album: this.#album?.build(),
-      assets: [],
-    };
+    return omitBy(
+      {
+        ...this.value,
+        owner: this.#owner?.build(),
+        album: this.#album?.build(),
+        assets: undefined,
+      },
+      isUndefined,
+    ) as SharedLinkStub<T>;
   }
 }

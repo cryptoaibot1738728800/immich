@@ -1,19 +1,15 @@
 import { Selectable } from 'kysely';
 import { AlbumUserRole } from 'src/enum';
 import { AlbumUserTable } from 'src/schema/tables/album-user.table';
-import { AlbumFactory } from 'test/factories/album.factory';
 import { build } from 'test/factories/builder.factory';
-import { AlbumUserLike, FactoryBuilder, UserLike } from 'test/factories/types';
+import { AlbumUserLike, AlbumUserStub, FactoryBuilder, RelationKeysPath, UserLike } from 'test/factories/types';
 import { UserFactory } from 'test/factories/user.factory';
 import { newDate, newUuid, newUuidV7 } from 'test/small.factory';
 
-export class AlbumUserFactory {
-  #user!: UserFactory;
+export class AlbumUserFactory<T extends RelationKeysPath<'albumUser'> = never> {
+  #user?: UserFactory;
 
-  private constructor(private readonly value: Selectable<AlbumUserTable>) {
-    value.userId ??= newUuid();
-    this.#user = UserFactory.from({ id: value.userId });
-  }
+  private constructor(private readonly value: Selectable<AlbumUserTable>) {}
 
   static create(dto: AlbumUserLike = {}) {
     return AlbumUserFactory.from(dto).build();
@@ -32,23 +28,17 @@ export class AlbumUserFactory {
     });
   }
 
-  album(dto: AlbumUserLike = {}, builder?: FactoryBuilder<AlbumFactory>) {
-    const album = build(AlbumFactory.from(dto), builder);
-    this.value.albumId = album.build().id;
-    return this;
-  }
-
   user(dto: UserLike = {}, builder?: FactoryBuilder<UserFactory>) {
     const user = build(UserFactory.from(dto), builder);
-    this.value.userId = user.build().id;
     this.#user = user;
-    return this;
+    this.value.userId = user.build().id;
+    return this as AlbumUserFactory<T | 'user'>;
   }
 
   build() {
     return {
       ...this.value,
-      user: this.#user.build(),
-    };
+      user: this.#user?.build(),
+    } as AlbumUserStub<T>;
   }
 }

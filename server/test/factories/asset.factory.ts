@@ -1,20 +1,29 @@
 import { Selectable } from 'kysely';
+import { isUndefined, omitBy } from 'lodash';
 import { AssetFileType, AssetStatus, AssetType, AssetVisibility } from 'src/enum';
-import { AssetFaceTable } from 'src/schema/tables/asset-face.table';
 import { AssetTable } from 'src/schema/tables/asset.table';
 import { AssetEditFactory } from 'test/factories/asset-edit.factory';
 import { AssetExifFactory } from 'test/factories/asset-exif.factory';
 import { AssetFileFactory } from 'test/factories/asset-file.factory';
 import { build } from 'test/factories/builder.factory';
-import { AssetEditLike, AssetExifLike, AssetFileLike, AssetLike, FactoryBuilder, UserLike } from 'test/factories/types';
+import {
+  AssetEditLike,
+  AssetExifLike,
+  AssetFileLike,
+  AssetLike,
+  AssetStub,
+  FactoryBuilder,
+  RelationKeysPath,
+  UserLike,
+} from 'test/factories/types';
 import { UserFactory } from 'test/factories/user.factory';
 import { newDate, newSha1, newUuid, newUuidV7 } from 'test/small.factory';
 
-export class AssetFactory {
-  #owner!: UserFactory;
+export class AssetFactory<T extends RelationKeysPath<'asset'> = never> {
   #assetExif?: AssetExifFactory;
-  #files: AssetFileFactory[] = [];
-  #edits: AssetEditFactory[] = [];
+  #owner?: UserFactory;
+  #files?: AssetFileFactory[];
+  #edits?: AssetEditFactory[];
 
   private constructor(private readonly value: Selectable<AssetTable>) {
     value.ownerId ??= newUuid();
@@ -68,29 +77,35 @@ export class AssetFactory {
   owner(dto: UserLike = {}, builder?: FactoryBuilder<UserFactory>) {
     this.#owner = build(UserFactory.from(dto), builder);
     this.value.ownerId = this.#owner.build().id;
-    return this;
+    return this as AssetFactory<T | 'owner'>;
   }
 
   exif(dto: AssetExifLike = {}, builder?: FactoryBuilder<AssetExifFactory>) {
     this.#assetExif = build(AssetExifFactory.from(dto), builder);
-    return this;
+    return this as AssetFactory<T | 'exif'>;
   }
 
   edit(dto: AssetEditLike = {}, builder?: FactoryBuilder<AssetEditFactory>) {
+    if (!this.#edits) {
+      this.#edits = [];
+    }
     this.#edits.push(build(AssetEditFactory.from(dto).asset(this.value), builder));
     this.value.isEdited = true;
-    return this;
+    return this as AssetFactory<T | 'edits'>;
   }
 
   file(dto: AssetFileLike = {}, builder?: FactoryBuilder<AssetFileFactory>) {
+    if (!this.#files) {
+      this.#files = [];
+    }
     this.#files.push(build(AssetFileFactory.from(dto).asset(this.value), builder));
-    return this;
+    return this as AssetFactory<T | 'files'>;
   }
 
-  files(dto?: 'edits'): AssetFactory;
-  files(items: AssetFileLike[], builder?: FactoryBuilder<AssetFileFactory>): AssetFactory;
-  files(items: AssetFileType[], builder?: FactoryBuilder<AssetFileFactory>): AssetFactory;
-  files(dto?: 'edits' | AssetFileLike[] | AssetFileType[], builder?: FactoryBuilder<AssetFileFactory>): AssetFactory {
+  files(dto?: 'edits'): AssetFactory<T | 'files'>;
+  files(items: AssetFileLike[], builder?: FactoryBuilder<AssetFileFactory>): AssetFactory<T | 'files'>;
+  files(items: AssetFileType[], builder?: FactoryBuilder<AssetFileFactory>): AssetFactory<T | 'files'>;
+  files(dto?: 'edits' | AssetFileLike[] | AssetFileType[], builder?: FactoryBuilder<AssetFileFactory>) {
     const items: AssetFileLike[] = [];
 
     if (dto === undefined || dto === 'edits') {
@@ -108,19 +123,22 @@ export class AssetFactory {
       this.file(item, builder);
     }
 
-    return this;
+    return this as AssetFactory<T | 'files'>;
   }
 
   build() {
     const exif = this.#assetExif?.build();
 
-    return {
-      ...this.value,
-      owner: this.#owner.build(),
-      exifInfo: exif as NonNullable<typeof exif>,
-      files: this.#files.map((file) => file.build()),
-      edits: this.#edits.map((edit) => edit.build()),
-      faces: [] as Selectable<AssetFaceTable>[],
-    };
+    return omitBy(
+      {
+        ...this.value,
+        owner: this.#owner?.build(),
+        exifInfo: exif as NonNullable<typeof exif>,
+        files: this.#files?.map((file) => file.build()),
+        edits: this.#edits?.map((edit) => edit.build()),
+        faces: undefined,
+      },
+      isUndefined,
+    ) as AssetStub<T>;
   }
 }
